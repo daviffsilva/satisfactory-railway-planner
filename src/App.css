@@ -1,0 +1,19 @@
+.app {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  background: #1a1a1a;
+}
+
+/* Satisfactory-inspired color scheme */
+:root {
+  --primary-orange: #ff6b35;
+  --secondary-blue: #4a9eff;
+  --accent-green: #00ff88;
+  --background-dark: #1a1a1a;
+  --surface-dark: #2a2a2a;
+  --text-light: #ffffff;
+  --text-muted: #cccccc;
+  --border-color: #444444;
+}
+
