@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/satisfactory-railway-planner/static/css/main.00290bc7.css",
+    "main.js": "/satisfactory-railway-planner/static/js/main.84bd0814.js",
+    "index.html": "/satisfactory-railway-planner/index.html",
+    "main.00290bc7.css.map": "/satisfactory-railway-planner/static/css/main.00290bc7.css.map",
+    "main.84bd0814.js.map": "/satisfactory-railway-planner/static/js/main.84bd0814.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.00290bc7.css",
+    "static/js/main.84bd0814.js"
+  ]
+}
