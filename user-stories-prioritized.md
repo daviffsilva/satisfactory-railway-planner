@@ -28,9 +28,12 @@
 - [ ] Works offline after initial load
 
 **Technical Notes for Code Lead:**
-- Requires background map asset integration
+- Use community Satisfactory world map (high-quality, widely accepted by players)  
+- Coordinate system: Store in centimeters (game native), display in meters (user-friendly)
+- Origin point: Use Satisfactory's world origin (0,0,0)
+- Default grid: 800cm (8m) - aligns with game's foundation grid
 - Canvas/SVG rendering decision needed
-- Coordinate system transformation logic
+- Coordinate system transformation logic (cm to m display conversion)
 - Performance considerations for large map rendering
 
 ---
@@ -43,8 +46,7 @@
 > As a Satisfactory player, I want to draw railway tracks between points so that I can design my network layout.
 
 **Acceptance Criteria:**
-- [ ] Draw tracks as polylines between nodes using Track tool
-- [ ] Support both straight and curved segments with control points
+- [ ] Draw tracks as straight line segments between nodes using Track tool
 - [ ] Create, move, and delete nodes with visual drag handles
 - [ ] Create, move, and delete segments with visual feedback
 - [ ] Prevent self-intersections at non-nodes or flag as errors
@@ -52,11 +54,16 @@
 - [ ] All track editing actions support undo/redo functionality
 - [ ] Track creation is keyboard accessible
 - [ ] React TypeScript implementation
+- [ ] **DEFERRED TO P2:** Curved segments with control points
 
 **Technical Notes for Code Lead:**
+- Use community Satisfactory world map initially (high-quality community source)
+- Store coordinates in centimeters (game native), display in meters for UI
+- Default grid: 800cm (8m) based on Satisfactory foundation grid
+- Straight line segments only for P1 (curves add significant complexity)
 - Core data model definition required
 - Canvas interaction system design
-- Geometry validation algorithms
+- Geometry validation algorithms (simplified for straight segments)
 - State management architecture decision
 
 ---
@@ -201,6 +208,33 @@
 - Junction geometry validation algorithms
 - Properties panel architecture
 - Real-time validation integration
+
+---
+
+### **2.5 - Curved Track Segments**
+**Epic:** Track Design  
+**Story ID:** US-TRACK-003  
+**Priority:** P2 - High  
+
+> As a Satisfactory player, I want to create curved railway tracks so that I can design more realistic and space-efficient railway networks.
+
+**Acceptance Criteria:**
+- [ ] Draw curved segments using Bezier curves with control points
+- [ ] Visual control point manipulation with drag handles
+- [ ] Curve validation to prevent impossible geometry
+- [ ] Smooth curve rendering at all zoom levels
+- [ ] Curved segments support all existing operations (delete, move endpoints)
+- [ ] Integration with block computation system
+- [ ] Integration with signal placement on curves
+- [ ] Curve data included in JSON export/import
+- [ ] Undo/redo support for curve operations
+
+**Technical Notes for Code Lead:**
+- Bezier curve mathematics and rendering
+- Control point UI/UX design
+- Geometry validation for curve intersections
+- Performance optimization for curve rendering
+- Integration with existing straight segment system
 
 ---
 
