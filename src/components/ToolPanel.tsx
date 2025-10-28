@@ -1,31 +1,40 @@
-import React, { useRef } from 'react';
-import { ToolType } from '../App';
+import React from 'react';
+import { ToolType } from '../types/state';
+import { Project } from '../types/railway';
+import { Action } from '../state/actions';
 import './ToolPanel.css';
 
 interface ToolPanelProps {
   selectedTool: ToolType;
-  onToolSelect: (tool: ToolType) => void;
-  onClearAll: () => void;
-  onSave: () => void;
-  onLoad: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  currentProject: Project | null;
+  lastSaveTime: number | null;
+  saveError: string | null;
+  dispatch: React.Dispatch<Action>;
 }
 
 const ToolPanel: React.FC<ToolPanelProps> = ({
   selectedTool,
-  onToolSelect,
-  onClearAll,
-  onSave,
-  onLoad
+  currentProject,
+  lastSaveTime,
+  saveError,
+  dispatch,
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const tools: { type: ToolType; label: string; icon: string }[] = [
-    { type: 'select', label: 'Select', icon: '↖' },
+    { type: 'select', label: 'Select', icon: '↖️' },
     { type: 'track', label: 'Track', icon: '━' },
-    { type: 'block-signal', label: 'Block Signal', icon: '🔵' },
-    { type: 'path-signal', label: 'Path Signal', icon: '🟢' },
-    { type: 'delete', label: 'Delete', icon: '🗑️' }
+    { type: 'signal', label: 'Signal', icon: '🔵' },
+    { type: 'delete', label: 'Delete', icon: '🗑️' },
+    { type: 'pan', label: 'Pan', icon: '✋' },
   ];
+
+  const formatRelativeTime = (timestamp: number): string => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
+  };
 
   return (
     <div className="tool-panel">
@@ -34,14 +43,30 @@ const ToolPanel: React.FC<ToolPanelProps> = ({
         <p>Design your railway network</p>
       </div>
 
+      {/* Project Info */}
+      {currentProject && (
+        <div className="project-info">
+          <h3>{currentProject.name}</h3>
+          <div className="project-stats">
+            <div>Nodes: {currentProject.nodes.length}</div>
+            <div>Segments: {currentProject.segments.length}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Tools */}
       <div className="tools-section">
         <h3>Tools</h3>
         <div className="tool-buttons">
           {tools.map(tool => (
             <button
               key={tool.type}
-              className={`tool-button ${selectedTool === tool.type ? 'active' : ''}`}
-              onClick={() => onToolSelect(tool.type)}
+              className={`tool-button ${
+                selectedTool === tool.type ? 'active' : ''
+              }`}
+              onClick={() =>
+                dispatch({ type: 'TOOL_SELECT', payload: { tool: tool.type } })
+              }
               title={tool.label}
             >
               <span className="tool-icon">{tool.icon}</span>
@@ -51,71 +76,84 @@ const ToolPanel: React.FC<ToolPanelProps> = ({
         </div>
       </div>
 
+      {/* Grid Controls */}
+      {currentProject && (
+        <div className="grid-controls">
+          <h3>Grid Settings</h3>
+          <label>
+            <input
+              type="checkbox"
+              checked={currentProject.settings.grid.visible}
+              onChange={e =>
+                dispatch({
+                  type: 'SETTINGS_UPDATE',
+                  payload: {
+                    grid: {
+                      ...currentProject.settings.grid,
+                      visible: e.target.checked,
+                    },
+                  },
+                })
+              }
+            />
+            Show Grid
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={currentProject.settings.grid.snapEnabled}
+              onChange={e =>
+                dispatch({
+                  type: 'SETTINGS_UPDATE',
+                  payload: {
+                    grid: {
+                      ...currentProject.settings.grid,
+                      snapEnabled: e.target.checked,
+                    },
+                  },
+                })
+              }
+            />
+            Snap to Grid
+          </label>
+          <div className="grid-size">
+            <label>Grid Size: {currentProject.settings.grid.size / 100}m</label>
+          </div>
+        </div>
+      )}
+
+      {/* Save Status */}
+      {lastSaveTime && (
+        <div className="save-status">
+          {saveError ? (
+            <span className="error">❌ {saveError}</span>
+          ) : (
+            <span className="success">
+              ✅ Saved {formatRelativeTime(lastSaveTime)}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Instructions */}
       <div className="instructions-section">
         <h3>Instructions</h3>
         <div className="instructions">
           {selectedTool === 'select' && (
-            <p>Click and drag to select multiple items</p>
+            <p>Click to select elements. Drag to move.</p>
           )}
           {selectedTool === 'track' && (
-            <p>Click and drag to place railway tracks. Tracks snap to grid.</p>
+            <p>Click to place nodes and create tracks. Tracks snap to grid.</p>
           )}
-          {selectedTool === 'block-signal' && (
-            <p>Click on tracks to place block signals. Blue signals control train movement.</p>
-          )}
-          {selectedTool === 'path-signal' && (
-            <p>Click on tracks to place path signals. Green signals allow multiple trains.</p>
+          {selectedTool === 'signal' && (
+            <p>Click on track segments to place block signals.</p>
           )}
           {selectedTool === 'delete' && (
-            <p>Click on tracks or signals to delete them.</p>
+            <p>Click on nodes, tracks, or signals to delete them.</p>
           )}
-        </div>
-      </div>
-
-      <div className="file-section">
-        <h3>File Operations</h3>
-        <div className="file-buttons">
-          <button className="file-button" onClick={onSave}>
-            💾 Save Design
-          </button>
-          <button 
-            className="file-button" 
-            onClick={() => fileInputRef.current?.click()}
-          >
-            📁 Load Design
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            onChange={onLoad}
-            style={{ display: 'none' }}
-          />
-          <button className="file-button danger" onClick={onClearAll}>
-            🗑️ Clear All
-          </button>
-        </div>
-      </div>
-
-      <div className="info-section">
-        <h3>About</h3>
-        <p>
-          This tool helps you plan railway networks for Satisfactory. 
-          Design your tracks and signals before building in-game.
-        </p>
-        <div className="legend">
-          <div className="legend-item">
-            <div className="legend-color track"></div>
-            <span>Railway Track</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color block-signal"></div>
-            <span>Block Signal</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-color path-signal"></div>
-            <span>Path Signal</span>
-          </div>
+          {selectedTool === 'pan' && (
+            <p>Drag to pan the view. Scroll to zoom.</p>
+          )}
         </div>
       </div>
     </div>
@@ -123,4 +161,3 @@ const ToolPanel: React.FC<ToolPanelProps> = ({
 };
 
 export default ToolPanel;
-

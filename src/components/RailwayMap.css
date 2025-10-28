@@ -1,20 +1,17 @@
 .railway-map {
   flex: 1;
   display: flex;
-  justify-content: center;
   align-items: center;
-  background: #1a1a1a;
+  justify-content: center;
+  background: #0a0a0a;
   overflow: hidden;
 }
 
 .map-canvas {
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
+  border: 1px solid #333;
   cursor: crosshair;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
-.map-canvas:hover {
-  border-color: var(--primary-orange);
+.map-canvas:active {
+  cursor: grabbing;
 }
-
