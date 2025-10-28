@@ -29,28 +29,68 @@ export interface Segment {
   id: string;
   aNodeId: string;
   bNodeId: string;
-  geometry: 'straight';  // P1: straight only
+  geometry: 'straight' | 'bezier';  // P2: Added bezier support
   metadata?: {
     createdAt: number;
     length?: number;  // cached, in centimeters
+    controlPoint?: Point;  // For bezier curves
   };
 }
 
-// P2 Preview - include type but not implementation
+/**
+ * Signal represents a control point on a segment
+ * Signals divide the network into blocks for train collision prevention
+ */
 export interface Signal {
   id: string;
   segmentId: string;
-  offsetT: number;  // position along segment [0.0, 1.0]
-  direction: 'AtoB' | 'BtoA' | 'Both';
+  offsetT: number;          // Position along segment [0.0, 1.0]
+  orientation: SignalOrientation;
+  type: 'block' | 'path';   // P2: only block signals implemented
   metadata?: {
     createdAt: number;
+    label?: string;
   };
 }
 
+export type SignalOrientation = 
+  | 'AtoB'          // One-way: nodeA → nodeB
+  | 'BtoA'          // One-way: nodeB → nodeA
+  | 'bidirectional'; // Two-way
+
+/**
+ * Block represents a track section where only one train can be
+ * Derived data structure, computed from segments and signals
+ */
+export interface Block {
+  id: string;
+  segmentIds: string[];     // Segments in this block
+  boundarySignalIds: string[]; // Signals at block boundaries
+  length: number;           // Total length in centimeters
+  connectedBlockIds: string[]; // Adjacent blocks
+  color: string;            // Unique color for visualization
+  metadata?: {
+    isOrphan: boolean;      // Not connected to main network
+  };
+}
+
+/**
+ * Signal validation issues
+ */
+export type SignalIssueType =
+  | 'signal_overlap'        // Two signals too close
+  | 'signal_conflict'       // Opposing one-way signals (deadlock)
+  | 'mega_block'            // Block spans multiple junctions
+  | 'junction_too_complex'  // Too many branches at junction
+  | 'junction_angle_too_small' // Segments too close at junction
+  | 'curve_extreme';        // Curve has extreme curvature
+
+// Add to existing IssueType union
 export type IssueType = 
   | 'orphaned_track'
   | 'self_intersection'
-  | 'duplicate_segment';
+  | 'duplicate_segment'
+  | SignalIssueType;
 
 export interface Issue {
   id: string;

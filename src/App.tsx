@@ -3,8 +3,10 @@ import RailwayMap from './components/RailwayMap';
 import ToolPanel from './components/ToolPanel';
 import IssuesPanel from './components/IssuesPanel';
 import ProjectManager from './components/ProjectManager';
+import BlockViewer from './components/BlockViewer';
 import { reducer, initialState } from './state/reducer';
 import { validateProject } from './utils/validation';
+import { computeBlocks } from './utils/blocks';
 import { saveProject, loadProject, loadProjectMetadataList } from './utils/localStorage';
 import './App.css';
 
@@ -30,13 +32,22 @@ function App() {
     });
   }, []);
 
-  // Validation effect
+  // Validation and block computation effect
   useEffect(() => {
     if (!state.currentProject) return;
 
     const timeoutId = setTimeout(() => {
+      // Validate project
       const issues = validateProject(state.currentProject!);
       dispatch({ type: 'VALIDATION_COMPLETE', payload: { issues } });
+      
+      // Compute blocks
+      const blocks = computeBlocks(
+        state.currentProject!.segments,
+        state.currentProject!.signals,
+        state.currentProject!.nodes
+      );
+      dispatch({ type: 'BLOCKS_COMPUTED', payload: { blocks } });
     }, 300);
 
     return () => clearTimeout(timeoutId);
@@ -75,7 +86,15 @@ function App() {
           dispatch={dispatch}
         />
         <RailwayMap state={state} dispatch={dispatch} />
-        <IssuesPanel issues={state.issues} dispatch={dispatch} />
+        <div className="right-panels">
+          <BlockViewer
+            blocks={state.blocks}
+            selectedBlockId={state.selectedBlockId}
+            showBlocks={state.showBlocks}
+            dispatch={dispatch}
+          />
+          <IssuesPanel issues={state.issues} dispatch={dispatch} />
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { Node, Segment, Signal, Issue, Project, ProjectSettings, Point } from '../types/railway';
+import { Node, Segment, Signal, Issue, Project, ProjectSettings, Point, Block } from '../types/railway';
 import { ToolType } from '../types/state';
 
 export type Action =
@@ -15,11 +15,27 @@ export type Action =
   
   // Segment actions
   | { type: 'SEGMENT_CREATE'; payload: { segment: Segment } }
+  | { type: 'SEGMENT_UPDATE'; payload: { id: string; changes: Partial<Segment> } }
   | { type: 'SEGMENT_DELETE'; payload: { id: string } }
   
-  // Signal actions (P2, stub for now)
+  // Signal actions
   | { type: 'SIGNAL_CREATE'; payload: { signal: Signal } }
+  | { type: 'SIGNAL_UPDATE'; payload: { id: string; changes: Partial<Signal> } }
   | { type: 'SIGNAL_DELETE'; payload: { id: string } }
+  
+  // Block actions
+  | { type: 'BLOCKS_COMPUTED'; payload: { blocks: Block[] } }
+  | { type: 'BLOCK_SELECT'; payload: { blockId: string | null } }
+  | { type: 'BLOCKS_TOGGLE'; payload: { show: boolean } }
+  
+  // Signal placement actions
+  | { type: 'SIGNAL_PLACEMENT_START'; payload: { segmentId: string } }
+  | { type: 'SIGNAL_PLACEMENT_END' }
+  
+  // Curve editing actions  
+  | { type: 'CURVE_EDIT_START'; payload: { segmentId: string } }
+  | { type: 'CURVE_EDIT_END' }
+  | { type: 'CURVE_UPDATE_CONTROL_POINT'; payload: { segmentId: string; controlPoint: Point } }
   
   // Validation
   | { type: 'VALIDATION_COMPLETE'; payload: { issues: Issue[] } }

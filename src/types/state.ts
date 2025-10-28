@@ -1,11 +1,12 @@
-import { Project, Issue, Point, ProjectSettings } from './railway';
+import { Project, Issue, Point, ProjectSettings, Block } from './railway';
 
 export type ToolType = 
   | 'select'
   | 'track'
   | 'signal'
   | 'delete'
-  | 'pan';
+  | 'pan'
+  | 'curve';
 
 export interface Viewport {
   offsetX: number;      // pan offset in screen pixels
@@ -21,17 +22,27 @@ export interface AppState {
   
   // Computed data
   issues: Issue[];
+  blocks: Block[];
   
   // UI state
   viewport: Viewport;
   selectedTool: ToolType;
   selectedElementIds: Set<string>;
+  showBlocks: boolean;
+  selectedBlockId: string | null;
   
   // Interaction state
   isDrawing: boolean;
   drawStartNodeId: string | null;
   hoverPoint: Point | null;
   hoverElementId: string | null;
+  
+  // Signal placement state
+  isPlacingSignal: boolean;
+  signalPlacementSegmentId: string | null;
+  
+  // Curve editing state
+  editingCurveSegmentId: string | null;
   
   // Persistence state
   isSaving: boolean;

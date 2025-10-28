@@ -5,13 +5,19 @@ import { Action } from './actions';
 export const initialState: AppState = {
   currentProject: null,
   issues: [],
+  blocks: [],
   viewport: DEFAULT_VIEWPORT,
   selectedTool: 'select',
   selectedElementIds: new Set(),
+  showBlocks: false,
+  selectedBlockId: null,
   isDrawing: false,
   drawStartNodeId: null,
   hoverPoint: null,
   hoverElementId: null,
+  isPlacingSignal: false,
+  signalPlacementSegmentId: null,
+  editingCurveSegmentId: null,
   isSaving: false,
   lastSaveTime: null,
   saveError: null,
@@ -97,12 +103,113 @@ export function reducer(state: AppState, action: Action): AppState {
         break;
       }
       
+      case 'SEGMENT_UPDATE': {
+        if (draft.currentProject) {
+          const segment = draft.currentProject.segments.find(s => s.id === action.payload.id);
+          if (segment) {
+            Object.assign(segment, action.payload.changes);
+            draft.currentProject.updatedAt = new Date().toISOString();
+          }
+        }
+        break;
+      }
+      
       case 'SEGMENT_DELETE': {
         if (draft.currentProject) {
+          // Remove segment
           draft.currentProject.segments = draft.currentProject.segments.filter(
             s => s.id !== action.payload.id
           );
+          // Remove signals on this segment
+          draft.currentProject.signals = draft.currentProject.signals.filter(
+            s => s.segmentId !== action.payload.id
+          );
           draft.currentProject.updatedAt = new Date().toISOString();
+        }
+        break;
+      }
+      
+      // SIGNAL ACTIONS
+      case 'SIGNAL_CREATE': {
+        if (draft.currentProject) {
+          draft.currentProject.signals.push(action.payload.signal);
+          draft.currentProject.updatedAt = new Date().toISOString();
+        }
+        break;
+      }
+      
+      case 'SIGNAL_UPDATE': {
+        if (draft.currentProject) {
+          const signal = draft.currentProject.signals.find(s => s.id === action.payload.id);
+          if (signal) {
+            Object.assign(signal, action.payload.changes);
+            draft.currentProject.updatedAt = new Date().toISOString();
+          }
+        }
+        break;
+      }
+      
+      case 'SIGNAL_DELETE': {
+        if (draft.currentProject) {
+          draft.currentProject.signals = draft.currentProject.signals.filter(
+            s => s.id !== action.payload.id
+          );
+          draft.currentProject.updatedAt = new Date().toISOString();
+        }
+        break;
+      }
+      
+      // BLOCK ACTIONS
+      case 'BLOCKS_COMPUTED': {
+        draft.blocks = action.payload.blocks;
+        break;
+      }
+      
+      case 'BLOCK_SELECT': {
+        draft.selectedBlockId = action.payload.blockId;
+        break;
+      }
+      
+      case 'BLOCKS_TOGGLE': {
+        draft.showBlocks = action.payload.show;
+        break;
+      }
+      
+      // SIGNAL PLACEMENT ACTIONS
+      case 'SIGNAL_PLACEMENT_START': {
+        draft.isPlacingSignal = true;
+        draft.signalPlacementSegmentId = action.payload.segmentId;
+        break;
+      }
+      
+      case 'SIGNAL_PLACEMENT_END': {
+        draft.isPlacingSignal = false;
+        draft.signalPlacementSegmentId = null;
+        break;
+      }
+      
+      // CURVE EDITING ACTIONS
+      case 'CURVE_EDIT_START': {
+        draft.editingCurveSegmentId = action.payload.segmentId;
+        break;
+      }
+      
+      case 'CURVE_EDIT_END': {
+        draft.editingCurveSegmentId = null;
+        break;
+      }
+      
+      case 'CURVE_UPDATE_CONTROL_POINT': {
+        if (draft.currentProject) {
+          const segment = draft.currentProject.segments.find(s => s.id === action.payload.segmentId);
+          if (segment) {
+            segment.geometry = 'bezier';
+            if (!segment.metadata) {
+              segment.metadata = { createdAt: Date.now() };
+            }
+            segment.metadata.controlPoint = action.payload.controlPoint;
+            draft.currentProject.updatedAt = new Date().toISOString();
+          }
         }
         break;
       }

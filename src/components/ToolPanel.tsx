@@ -22,6 +22,7 @@ const ToolPanel: React.FC<ToolPanelProps> = ({
   const tools: { type: ToolType; label: string; icon: string }[] = [
     { type: 'select', label: 'Select', icon: '↖️' },
     { type: 'track', label: 'Track', icon: '━' },
+    { type: 'signal', label: 'Signal', icon: '🔵' },
     { type: 'delete', label: 'Delete', icon: '🗑️' },
     { type: 'pan', label: 'Pan', icon: '✋' },
   ];
@@ -144,8 +145,11 @@ const ToolPanel: React.FC<ToolPanelProps> = ({
           {selectedTool === 'track' && (
             <p>Click to place nodes and create tracks. Tracks snap to grid.</p>
           )}
+          {selectedTool === 'signal' && (
+            <p>Click on track segments to place block signals.</p>
+          )}
           {selectedTool === 'delete' && (
-            <p>Click on nodes or tracks to delete them.</p>
+            <p>Click on nodes, tracks, or signals to delete them.</p>
           )}
           {selectedTool === 'pan' && (
             <p>Drag to pan the view. Scroll to zoom.</p>

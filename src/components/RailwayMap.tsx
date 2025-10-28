@@ -13,7 +13,10 @@ import {
   renderNodes,
   renderIssues,
   renderDrawPreview,
+  renderSignals,
+  renderBlocks,
 } from '../utils/rendering';
+import { findSegmentAtPoint, findNearestPointOnSegment } from '../utils/signalPlacement';
 import './RailwayMap.css';
 
 interface RailwayMapProps {
@@ -51,6 +54,7 @@ const RailwayMap: React.FC<RailwayMapProps> = ({ state, dispatch }) => {
 
     // Build node map for efficient lookups
     const nodeMap = new Map(state.currentProject.nodes.map(n => [n.id, n]));
+    const segmentMap = new Map(state.currentProject.segments.map(s => [s.id, s]));
 
     // Render layers
     if (state.currentProject.settings.grid.visible) {
@@ -59,6 +63,18 @@ const RailwayMap: React.FC<RailwayMapProps> = ({ state, dispatch }) => {
         state.viewport,
         state.currentProject.settings.grid.size,
         state.currentProject.settings.grid.opacity
+      );
+    }
+
+    // Render blocks first (background)
+    if (state.showBlocks && state.blocks.length > 0) {
+      renderBlocks(
+        ctx,
+        state.blocks,
+        state.currentProject.segments,
+        nodeMap,
+        state.selectedBlockId,
+        state.viewport
       );
     }
 
@@ -77,6 +93,19 @@ const RailwayMap: React.FC<RailwayMapProps> = ({ state, dispatch }) => {
       renderNodes(
         ctx,
         state.currentProject.nodes,
+        state.selectedElementIds,
+        state.hoverElementId,
+        state.viewport
+      );
+    }
+
+    // Render signals
+    if (state.currentProject.settings.display.showSignals) {
+      renderSignals(
+        ctx,
+        state.currentProject.signals,
+        segmentMap,
+        nodeMap,
         state.selectedElementIds,
         state.hoverElementId,
         state.viewport
@@ -169,6 +198,28 @@ const RailwayMap: React.FC<RailwayMapProps> = ({ state, dispatch }) => {
             }
 
             dispatch({ type: 'DRAW_END' });
+          }
+        } else if (state.selectedTool === 'signal') {
+          // Signal placement
+          const nodeMap = new Map(state.currentProject.nodes.map(n => [n.id, n]));
+          const segment = findSegmentAtPoint(
+            worldPoint,
+            state.currentProject.segments,
+            nodeMap,
+            400 // 4 meters threshold
+          );
+          
+          if (segment) {
+            const offsetT = findNearestPointOnSegment(worldPoint, segment, nodeMap);
+            const signal = {
+              id: crypto.randomUUID(),
+              segmentId: segment.id,
+              offsetT,
+              orientation: 'bidirectional' as const,
+              type: 'block' as const,
+              metadata: { createdAt: Date.now() },
+            };
+            dispatch({ type: 'SIGNAL_CREATE', payload: { signal } });
           }
         } else if (state.selectedTool === 'delete') {
           handleDelete(worldPoint, state, dispatch);
@@ -301,6 +352,31 @@ function handleDelete(
 
   const threshold = 400; // 4 meters
 
+  // Check for signal deletion first (signals are smaller and should take priority)
+  const nodeMap = new Map(state.currentProject.nodes.map(n => [n.id, n]));
+  const segmentMap = new Map(state.currentProject.segments.map(s => [s.id, s]));
+  
+  for (const signal of state.currentProject.signals) {
+    const segment = segmentMap.get(signal.segmentId);
+    if (!segment) continue;
+    
+    const nodeA = nodeMap.get(segment.aNodeId);
+    const nodeB = nodeMap.get(segment.bNodeId);
+    if (!nodeA || !nodeB) continue;
+    
+    // Calculate signal position
+    const signalPos = {
+      x: nodeA.x + (nodeB.x - nodeA.x) * signal.offsetT,
+      y: nodeA.y + (nodeB.y - nodeA.y) * signal.offsetT,
+    };
+    
+    const dist = Math.hypot(signalPos.x - worldPoint.x, signalPos.y - worldPoint.y);
+    if (dist < threshold / 2) { // Smaller threshold for signals
+      dispatch({ type: 'SIGNAL_DELETE', payload: { id: signal.id } });
+      return;
+    }
+  }
+
   // Check for node deletion
   for (const node of state.currentProject.nodes) {
     const dist = Math.hypot(node.x - worldPoint.x, node.y - worldPoint.y);
@@ -311,7 +387,6 @@ function handleDelete(
   }
 
   // Check for segment deletion
-  const nodeMap = new Map(state.currentProject.nodes.map(n => [n.id, n]));
   for (const seg of state.currentProject.segments) {
     const nodeA = nodeMap.get(seg.aNodeId);
     const nodeB = nodeMap.get(seg.bNodeId);
