@@ -1,28 +1,22 @@
 {
   "name": "satisfactory-railway-planner",
   "version": "1.0.0",
+  "type": "module",
   "description": "Interactive railway planner for Satisfactory game",
   "private": true,
   "homepage": "https://daviffsilva.github.io/satisfactory-railway-planner",
   "dependencies": {
-    "@types/node": "^16.18.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "typescript": "^4.9.0",
-    "web-vitals": "^2.1.0",
-    "fabric": "^5.3.0",
-    "@types/fabric": "^5.3.0"
+    "immer": "^10.2.0"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext ts,tsx",
+    "test": "vitest",
+    "deploy": "npm run build && gh-pages -d dist"
   },
   "eslintConfig": {
     "extends": [
@@ -43,7 +37,18 @@
     ]
   },
   "devDependencies": {
-    "gh-pages": "^4.0.0"
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@types/node": "^18.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "gh-pages": "^4.0.0",
+    "typescript": "^5.2.2",
+    "vite": "^4.5.0",
+    "vitest": "^1.0.4"
   }
 }
-

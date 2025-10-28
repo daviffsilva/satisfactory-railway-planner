@@ -1,252 +1,364 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { ToolType, TrackSegment, Signal } from '../App';
+import React, { useRef, useEffect, useCallback } from 'react';
+import { AppState } from '../types/state';
+import { Node, Segment } from '../types/railway';
+import { Action } from '../state/actions';
+import {
+  screenToWorld,
+  snapToGrid,
+  findNearestNode,
+} from '../utils/coordinates';
+import {
+  renderGrid,
+  renderSegments,
+  renderNodes,
+  renderIssues,
+  renderDrawPreview,
+} from '../utils/rendering';
 import './RailwayMap.css';
 
 interface RailwayMapProps {
-  selectedTool: ToolType;
-  tracks: TrackSegment[];
-  signals: Signal[];
-  onTracksChange: (tracks: TrackSegment[]) => void;
-  onSignalsChange: (signals: Signal[]) => void;
+  state: AppState;
+  dispatch: React.Dispatch<Action>;
 }
 
-const RailwayMap: React.FC<RailwayMapProps> = ({
-  selectedTool,
-  tracks,
-  signals,
-  onTracksChange,
-  onSignalsChange
-}) => {
+const RailwayMap: React.FC<RailwayMapProps> = ({ state, dispatch }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
-  const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(null);
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef({ x: 0, y: 0 });
 
-  const GRID_SIZE = 20;
-  const CANVAS_WIDTH = 1200;
-  const CANVAS_HEIGHT = 800;
-
-  const snapToGrid = useCallback((x: number, y: number) => {
-    return {
-      x: Math.round(x / GRID_SIZE) * GRID_SIZE,
-      y: Math.round(y / GRID_SIZE) * GRID_SIZE
-    };
-  }, []);
-
-  const getMousePos = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Render frame
+  const renderFrame = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    
-    return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY
-    };
-  }, []);
+    if (!canvas || !state.currentProject) return;
 
-  const drawGrid = useCallback((ctx: CanvasRenderingContext2D) => {
-    ctx.strokeStyle = '#333333';
-    ctx.lineWidth = 1;
-    
-    for (let x = 0; x <= CANVAS_WIDTH; x += GRID_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, CANVAS_HEIGHT);
-      ctx.stroke();
-    }
-    
-    for (let y = 0; y <= CANVAS_HEIGHT; y += GRID_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(CANVAS_WIDTH, y);
-      ctx.stroke();
-    }
-  }, []);
-
-  const drawTracks = useCallback((ctx: CanvasRenderingContext2D) => {
-    tracks.forEach(track => {
-      ctx.strokeStyle = '#ff6b35';
-      ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
-      
-      ctx.beginPath();
-      ctx.moveTo(track.startX, track.startY);
-      ctx.lineTo(track.endX, track.endY);
-      ctx.stroke();
-    });
-  }, [tracks]);
-
-  const drawSignals = useCallback((ctx: CanvasRenderingContext2D) => {
-    signals.forEach(signal => {
-      const size = 8;
-      ctx.fillStyle = signal.type === 'block' ? '#4a9eff' : '#00ff88';
-      ctx.fillRect(signal.x - size/2, signal.y - size/2, size, size);
-      
-      // Draw direction indicator
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      const arrowSize = 6;
-      switch (signal.direction) {
-        case 'north':
-          ctx.moveTo(signal.x, signal.y - size/2);
-          ctx.lineTo(signal.x - arrowSize/2, signal.y - size/2 - arrowSize);
-          ctx.moveTo(signal.x, signal.y - size/2);
-          ctx.lineTo(signal.x + arrowSize/2, signal.y - size/2 - arrowSize);
-          break;
-        case 'south':
-          ctx.moveTo(signal.x, signal.y + size/2);
-          ctx.lineTo(signal.x - arrowSize/2, signal.y + size/2 + arrowSize);
-          ctx.moveTo(signal.x, signal.y + size/2);
-          ctx.lineTo(signal.x + arrowSize/2, signal.y + size/2 + arrowSize);
-          break;
-        case 'east':
-          ctx.moveTo(signal.x + size/2, signal.y);
-          ctx.lineTo(signal.x + size/2 + arrowSize, signal.y - arrowSize/2);
-          ctx.moveTo(signal.x + size/2, signal.y);
-          ctx.lineTo(signal.x + size/2 + arrowSize, signal.y + arrowSize/2);
-          break;
-        case 'west':
-          ctx.moveTo(signal.x - size/2, signal.y);
-          ctx.lineTo(signal.x - size/2 - arrowSize, signal.y - arrowSize/2);
-          ctx.moveTo(signal.x - size/2, signal.y);
-          ctx.lineTo(signal.x - size/2 - arrowSize, signal.y + arrowSize/2);
-          break;
-      }
-      ctx.stroke();
-    });
-  }, [signals]);
-
-  const drawPreview = useCallback((ctx: CanvasRenderingContext2D) => {
-    if (!startPoint || !hoverPoint) return;
-
-    if (selectedTool === 'track') {
-      ctx.strokeStyle = '#ff6b35';
-      ctx.lineWidth = 3;
-      ctx.setLineDash([5, 5]);
-      ctx.beginPath();
-      ctx.moveTo(startPoint.x, startPoint.y);
-      ctx.lineTo(hoverPoint.x, hoverPoint.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-  }, [selectedTool, startPoint, hoverPoint]);
-
-  const redraw = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     // Clear canvas
     ctx.fillStyle = '#1a1a1a';
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw grid
-    drawGrid(ctx);
+    // Apply viewport transform
+    ctx.save();
+    ctx.setTransform(
+      state.viewport.scale,
+      0,
+      0,
+      state.viewport.scale,
+      state.viewport.offsetX,
+      state.viewport.offsetY
+    );
 
-    // Draw existing tracks
-    drawTracks(ctx);
+    // Build node map for efficient lookups
+    const nodeMap = new Map(state.currentProject.nodes.map(n => [n.id, n]));
 
-    // Draw existing signals
-    drawSignals(ctx);
+    // Render layers
+    if (state.currentProject.settings.grid.visible) {
+      renderGrid(
+        ctx,
+        state.viewport,
+        state.currentProject.settings.grid.size,
+        state.currentProject.settings.grid.opacity
+      );
+    }
+
+    if (state.currentProject.settings.display.showSegments) {
+      renderSegments(
+        ctx,
+        state.currentProject.segments,
+        nodeMap,
+        state.selectedElementIds,
+        state.hoverElementId,
+        state.viewport
+      );
+    }
+
+    if (state.currentProject.settings.display.showNodes) {
+      renderNodes(
+        ctx,
+        state.currentProject.nodes,
+        state.selectedElementIds,
+        state.hoverElementId,
+        state.viewport
+      );
+    }
+
+    if (state.currentProject.settings.display.showIssues) {
+      renderIssues(ctx, state.issues, state.viewport);
+    }
 
     // Draw preview
-    drawPreview(ctx);
-  }, [drawGrid, drawTracks, drawSignals, drawPreview]);
-
-  useEffect(() => {
-    redraw();
-  }, [redraw]);
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const pos = getMousePos(e);
-    const snapped = snapToGrid(pos.x, pos.y);
-
-    if (selectedTool === 'track') {
-      setIsDrawing(true);
-      setStartPoint(snapped);
-    } else if (selectedTool === 'block-signal' || selectedTool === 'path-signal') {
-      const newSignal: Signal = {
-        id: Date.now().toString(),
-        x: snapped.x,
-        y: snapped.y,
-        type: selectedTool === 'block-signal' ? 'block' : 'path',
-        direction: 'north'
-      };
-      onSignalsChange([...signals, newSignal]);
-    } else if (selectedTool === 'delete') {
-      // Delete tracks or signals at this position
-      const threshold = 10;
-      const filteredTracks = tracks.filter(track => {
-        const distToStart = Math.sqrt((track.startX - snapped.x) ** 2 + (track.startY - snapped.y) ** 2);
-        const distToEnd = Math.sqrt((track.endX - snapped.x) ** 2 + (track.endY - snapped.y) ** 2);
-        return distToStart > threshold && distToEnd > threshold;
-      });
-      
-      const filteredSignals = signals.filter(signal => {
-        const dist = Math.sqrt((signal.x - snapped.x) ** 2 + (signal.y - snapped.y) ** 2);
-        return dist > threshold;
-      });
-      
-      onTracksChange(filteredTracks);
-      onSignalsChange(filteredSignals);
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const pos = getMousePos(e);
-    const snapped = snapToGrid(pos.x, pos.y);
-    setHoverPoint(snapped);
-  };
-
-  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (selectedTool === 'track' && isDrawing && startPoint) {
-      const pos = getMousePos(e);
-      const snapped = snapToGrid(pos.x, pos.y);
-      
-      if (snapped.x !== startPoint.x || snapped.y !== startPoint.y) {
-        const newTrack: TrackSegment = {
-          id: Date.now().toString(),
-          startX: startPoint.x,
-          startY: startPoint.y,
-          endX: snapped.x,
-          endY: snapped.y,
-          type: 'straight'
-        };
-        onTracksChange([...tracks, newTrack]);
+    if (state.drawStartNodeId && state.hoverPoint) {
+      const startNode = nodeMap.get(state.drawStartNodeId);
+      if (startNode) {
+        renderDrawPreview(ctx, startNode, state.hoverPoint, state.viewport);
       }
     }
-    
-    setIsDrawing(false);
-    setStartPoint(null);
-  };
 
-  const handleMouseLeave = () => {
-    setIsDrawing(false);
-    setStartPoint(null);
-    setHoverPoint(null);
-  };
+    ctx.restore();
+  }, [state]);
+
+  // Trigger re-render on state changes
+  useEffect(() => {
+    renderFrame();
+  }, [renderFrame]);
+
+  // Mouse down handler
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current;
+      if (!canvas || !state.currentProject) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+
+      // Pan mode (middle mouse or spacebar)
+      if (e.button === 1 || state.selectedTool === 'pan') {
+        isPanningRef.current = true;
+        panStartRef.current = { x: e.clientX, y: e.clientY };
+        e.preventDefault();
+        return;
+      }
+
+      // Left mouse button
+      if (e.button === 0) {
+        let worldPoint = screenToWorld(screenX, screenY, state.viewport);
+        let existingNodeId: string | null = null;
+
+        // Apply snapping
+        const settings = state.currentProject.settings;
+        if (settings.grid.snapEnabled) {
+          const nearNode = findNearestNode(
+            worldPoint,
+            state.currentProject.nodes,
+            400 // 4 meters snap distance
+          );
+          if (nearNode) {
+            worldPoint = { x: nearNode.x, y: nearNode.y };
+            existingNodeId = nearNode.id;
+          } else {
+            worldPoint = snapToGrid(worldPoint, settings.grid.size);
+          }
+        }
+
+        // Handle tool actions
+        if (state.selectedTool === 'track') {
+          if (!state.drawStartNodeId) {
+            // Start drawing
+            const nodeId =
+              existingNodeId ||
+              createNode(worldPoint, state.currentProject.nodes, dispatch);
+            dispatch({ type: 'DRAW_START', payload: { nodeId } });
+          } else {
+            // End drawing
+            const endNodeId =
+              existingNodeId ||
+              createNode(worldPoint, state.currentProject.nodes, dispatch);
+
+            if (endNodeId !== state.drawStartNodeId) {
+              // Create segment
+              const segment: Segment = {
+                id: crypto.randomUUID(),
+                aNodeId: state.drawStartNodeId,
+                bNodeId: endNodeId,
+                geometry: 'straight',
+                metadata: { createdAt: Date.now() },
+              };
+              dispatch({ type: 'SEGMENT_CREATE', payload: { segment } });
+            }
+
+            dispatch({ type: 'DRAW_END' });
+          }
+        } else if (state.selectedTool === 'delete') {
+          handleDelete(worldPoint, state, dispatch);
+        }
+      }
+    },
+    [state, dispatch]
+  );
+
+  // Mouse move handler
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current;
+      if (!canvas || !state.currentProject) return;
+
+      // Handle panning
+      if (isPanningRef.current) {
+        const deltaX = e.clientX - panStartRef.current.x;
+        const deltaY = e.clientY - panStartRef.current.y;
+        dispatch({ type: 'VIEWPORT_PAN', payload: { deltaX, deltaY } });
+        panStartRef.current = { x: e.clientX, y: e.clientY };
+        return;
+      }
+
+      // Update hover point
+      const rect = canvas.getBoundingClientRect();
+      const screenX = e.clientX - rect.left;
+      const screenY = e.clientY - rect.top;
+      let worldPoint = screenToWorld(screenX, screenY, state.viewport);
+
+      // Apply snapping for preview
+      const settings = state.currentProject.settings;
+      if (settings.grid.snapEnabled) {
+        const nearNode = findNearestNode(
+          worldPoint,
+          state.currentProject.nodes,
+          400
+        );
+        if (nearNode) {
+          worldPoint = { x: nearNode.x, y: nearNode.y };
+        } else {
+          worldPoint = snapToGrid(worldPoint, settings.grid.size);
+        }
+      }
+
+      dispatch({
+        type: 'HOVER_UPDATE',
+        payload: { point: worldPoint, elementId: null },
+      });
+    },
+    [state, dispatch]
+  );
+
+  // Mouse up handler
+  const handleMouseUp = useCallback(() => {
+    isPanningRef.current = false;
+  }, []);
+
+  // Mouse leave handler
+  const handleMouseLeave = useCallback(() => {
+    isPanningRef.current = false;
+    dispatch({
+      type: 'HOVER_UPDATE',
+      payload: { point: null, elementId: null },
+    });
+  }, [dispatch]);
+
+  // Wheel handler (zoom)
+  const handleWheel = useCallback(
+    (e: React.WheelEvent<HTMLCanvasElement>) => {
+      e.preventDefault();
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const centerX = e.clientX - rect.left;
+      const centerY = e.clientY - rect.top;
+
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+
+      dispatch({
+        type: 'VIEWPORT_ZOOM',
+        payload: { delta, centerX, centerY },
+      });
+    },
+    [dispatch]
+  );
 
   return (
     <div className="railway-map">
       <canvas
         ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
+        width={1200}
+        height={800}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
+        onWheel={handleWheel}
         className="map-canvas"
       />
     </div>
   );
 };
+
+// Helper function to create a node
+function createNode(
+  position: { x: number; y: number },
+  existingNodes: Node[],
+  dispatch: React.Dispatch<Action>
+): string {
+  const node: Node = {
+    id: crypto.randomUUID(),
+    x: position.x,
+    y: position.y,
+    type: 'regular',
+    metadata: { createdAt: Date.now() },
+  };
+  dispatch({ type: 'NODE_CREATE', payload: { node } });
+  return node.id;
+}
+
+// Helper function to handle delete
+function handleDelete(
+  worldPoint: { x: number; y: number },
+  state: AppState,
+  dispatch: React.Dispatch<Action>
+): void {
+  if (!state.currentProject) return;
+
+  const threshold = 400; // 4 meters
+
+  // Check for node deletion
+  for (const node of state.currentProject.nodes) {
+    const dist = Math.hypot(node.x - worldPoint.x, node.y - worldPoint.y);
+    if (dist < threshold) {
+      dispatch({ type: 'NODE_DELETE', payload: { id: node.id } });
+      return;
+    }
+  }
+
+  // Check for segment deletion
+  const nodeMap = new Map(state.currentProject.nodes.map(n => [n.id, n]));
+  for (const seg of state.currentProject.segments) {
+    const nodeA = nodeMap.get(seg.aNodeId);
+    const nodeB = nodeMap.get(seg.bNodeId);
+    if (!nodeA || !nodeB) continue;
+
+    // Point-to-line distance
+    const dist = pointToLineDistance(worldPoint, nodeA, nodeB);
+    if (dist < threshold) {
+      dispatch({ type: 'SEGMENT_DELETE', payload: { id: seg.id } });
+      return;
+    }
+  }
+}
+
+// Helper: point-to-line distance
+function pointToLineDistance(
+  point: { x: number; y: number },
+  lineStart: { x: number; y: number },
+  lineEnd: { x: number; y: number }
+): number {
+  const A = point.x - lineStart.x;
+  const B = point.y - lineStart.y;
+  const C = lineEnd.x - lineStart.x;
+  const D = lineEnd.y - lineStart.y;
+
+  const dot = A * C + B * D;
+  const lenSq = C * C + D * D;
+  let param = -1;
+  if (lenSq !== 0) param = dot / lenSq;
+
+  let xx, yy;
+
+  if (param < 0) {
+    xx = lineStart.x;
+    yy = lineStart.y;
+  } else if (param > 1) {
+    xx = lineEnd.x;
+    yy = lineEnd.y;
+  } else {
+    xx = lineStart.x + param * C;
+    yy = lineStart.y + param * D;
+  }
+
+  const dx = point.x - xx;
+  const dy = point.y - yy;
+  return Math.sqrt(dx * dx + dy * dy);
+}
 
 export default RailwayMap;
 
