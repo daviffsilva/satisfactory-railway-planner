@@ -95,6 +95,7 @@ function App() {
             currentProject={state.currentProject}
             lastSaveTime={state.lastSaveTime}
             saveError={state.saveError}
+            showBlockView={state.showBlockView}
             dispatch={dispatch}
           />
           {state.showBlockView && (

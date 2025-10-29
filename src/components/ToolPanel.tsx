@@ -9,6 +9,7 @@ interface ToolPanelProps {
   currentProject: Project | null;
   lastSaveTime: number | null;
   saveError: string | null;
+  showBlockView: boolean;
   dispatch: React.Dispatch<Action>;
 }
 
@@ -17,11 +18,14 @@ const ToolPanel: React.FC<ToolPanelProps> = ({
   currentProject,
   lastSaveTime,
   saveError,
+  showBlockView,
   dispatch,
 }) => {
   const tools: { type: ToolType; label: string; icon: string }[] = [
     { type: 'select', label: 'Select', icon: '↖️' },
     { type: 'track', label: 'Track', icon: '━' },
+    { type: 'signal', label: 'Signal', icon: '🚦' },
+    { type: 'curve', label: 'Curve', icon: '⌇' },
     { type: 'delete', label: 'Delete', icon: '🗑️' },
     { type: 'pan', label: 'Pan', icon: '✋' },
   ];
@@ -134,6 +138,23 @@ const ToolPanel: React.FC<ToolPanelProps> = ({
         </div>
       )}
 
+      {/* Block View Toggle */}
+      {currentProject && (
+        <div className="block-view-toggle">
+          <h3>Block Visualization</h3>
+          <label>
+            <input
+              type="checkbox"
+              checked={showBlockView}
+              onChange={() =>
+                dispatch({ type: 'BLOCK_VIEW_TOGGLE' })
+              }
+            />
+            Show Block View
+          </label>
+        </div>
+      )}
+
       {/* Instructions */}
       <div className="instructions-section">
         <h3>Instructions</h3>
@@ -142,10 +163,16 @@ const ToolPanel: React.FC<ToolPanelProps> = ({
             <p>Click to select elements. Drag to move.</p>
           )}
           {selectedTool === 'track' && (
-            <p>Click to place nodes and create tracks. Tracks snap to grid.</p>
+            <p>Click to place nodes and create tracks. Nodes snap to nearby nodes.</p>
+          )}
+          {selectedTool === 'signal' && (
+            <p>Click on a track segment to place a signal. Signals control train traffic.</p>
+          )}
+          {selectedTool === 'curve' && (
+            <p>Click a straight segment to convert to curve. Drag control points to adjust.</p>
           )}
           {selectedTool === 'delete' && (
-            <p>Click on nodes or tracks to delete them.</p>
+            <p>Click on nodes, tracks, or signals to delete them.</p>
           )}
           {selectedTool === 'pan' && (
             <p>Drag to pan the view. Scroll to zoom.</p>

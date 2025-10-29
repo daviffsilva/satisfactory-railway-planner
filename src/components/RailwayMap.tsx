@@ -126,20 +126,23 @@ const RailwayMap: React.FC<RailwayMapProps> = ({ state, dispatch }) => {
         let worldPoint = screenToWorld(screenX, screenY, state.viewport);
         let existingNodeId: string | null = null;
 
-        // Apply snapping
+        // Apply snapping (node snapping is always enabled for connecting tracks)
         const settings = state.currentProject.settings;
-        if (settings.grid.snapEnabled) {
-          const nearNode = findNearestNode(
-            worldPoint,
-            state.currentProject.nodes,
-            400 // 4 meters snap distance
-          );
-          if (nearNode) {
-            worldPoint = { x: nearNode.x, y: nearNode.y };
-            existingNodeId = nearNode.id;
-          } else {
-            worldPoint = snapToGrid(worldPoint, settings.grid.size);
-          }
+        
+        // Always check for nearby nodes first (independent of grid snap)
+        const nearNode = findNearestNode(
+          worldPoint,
+          state.currentProject.nodes,
+          400 // 4 meters snap distance
+        );
+        
+        if (nearNode) {
+          // Snap to existing node
+          worldPoint = { x: nearNode.x, y: nearNode.y };
+          existingNodeId = nearNode.id;
+        } else if (settings.grid.snapEnabled) {
+          // If no nearby node and grid snap is enabled, snap to grid
+          worldPoint = snapToGrid(worldPoint, settings.grid.size);
         }
 
         // Handle tool actions
@@ -199,19 +202,22 @@ const RailwayMap: React.FC<RailwayMapProps> = ({ state, dispatch }) => {
       const screenY = e.clientY - rect.top;
       let worldPoint = screenToWorld(screenX, screenY, state.viewport);
 
-      // Apply snapping for preview
+      // Apply snapping for preview (node snapping always enabled)
       const settings = state.currentProject.settings;
-      if (settings.grid.snapEnabled) {
-        const nearNode = findNearestNode(
-          worldPoint,
-          state.currentProject.nodes,
-          400
-        );
-        if (nearNode) {
-          worldPoint = { x: nearNode.x, y: nearNode.y };
-        } else {
-          worldPoint = snapToGrid(worldPoint, settings.grid.size);
-        }
+      
+      // Always check for nearby nodes first
+      const nearNode = findNearestNode(
+        worldPoint,
+        state.currentProject.nodes,
+        400
+      );
+      
+      if (nearNode) {
+        // Snap to existing node
+        worldPoint = { x: nearNode.x, y: nearNode.y };
+      } else if (settings.grid.snapEnabled) {
+        // If no nearby node and grid snap is enabled, snap to grid
+        worldPoint = snapToGrid(worldPoint, settings.grid.size);
       }
 
       dispatch({
