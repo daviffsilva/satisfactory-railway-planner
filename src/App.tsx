@@ -1,78 +1,119 @@
-import React, { useState } from 'react';
+import React, { useReducer, useEffect } from 'react';
 import RailwayMap from './components/RailwayMap';
 import ToolPanel from './components/ToolPanel';
+import IssuesPanel from './components/IssuesPanel';
+import ProjectManager from './components/ProjectManager';
+import UndoRedoToolbar from './components/UndoRedoToolbar';
+import BlockViewer from './components/BlockViewer';
+import { reducer, initialState } from './state/reducer';
+import { validateProject } from './utils/validation';
+import { saveProject, loadProject, loadProjectMetadataList } from './utils/localStorage';
+import { computeBlocks } from './utils/blocks';
 import './App.css';
 
-export type ToolType = 'select' | 'track' | 'block-signal' | 'path-signal' | 'delete';
-
-export interface TrackSegment {
-  id: string;
-  startX: number;
-  startY: number;
-  endX: number;
-  endY: number;
-  type: 'straight' | 'curve';
-}
-
-export interface Signal {
-  id: string;
-  x: number;
-  y: number;
-  type: 'block' | 'path';
-  direction: 'north' | 'south' | 'east' | 'west';
-}
-
 function App() {
-  const [selectedTool, setSelectedTool] = useState<ToolType>('select');
-  const [tracks, setTracks] = useState<TrackSegment[]>([]);
-  const [signals, setSignals] = useState<Signal[]>([]);
+  const [state, dispatch] = useReducer(reducer, initialState);
+
+  // Initialize with a default project or load last project
+  useEffect(() => {
+    const metadataList = loadProjectMetadataList();
+    if (metadataList.length > 0) {
+      // Load last project
+      const lastProject = loadProject(metadataList[0].id);
+      if (lastProject) {
+        dispatch({ type: 'PROJECT_LOAD', payload: { project: lastProject } });
+        return;
+      }
+    }
+    
+    // Create default project
+    dispatch({
+      type: 'PROJECT_NEW',
+      payload: { name: 'My Railway Network' },
+    });
+  }, []);
+
+  // Block computation effect (P2) - must run before validation
+  useEffect(() => {
+    if (!state.currentProject) return;
+
+    const timeoutId = setTimeout(() => {
+      const blocks = computeBlocks(
+        state.currentProject.segments,
+        state.currentProject.signals,
+        state.currentProject.nodes
+      );
+      dispatch({ type: 'BLOCKS_COMPUTE', payload: { blocks } });
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [state.currentProject?.segments, state.currentProject?.signals, state.currentProject?.nodes]);
+
+  // Validation effect (P1 + P2) - runs after blocks are computed
+  useEffect(() => {
+    if (!state.currentProject) return;
+
+    const timeoutId = setTimeout(() => {
+      const issues = validateProject(
+        state.currentProject,
+        state.blocks.length > 0 ? state.blocks : undefined
+      );
+      dispatch({ type: 'VALIDATION_COMPLETE', payload: { issues } });
+    }, 350); // Slightly longer delay to ensure blocks compute first
+
+    return () => clearTimeout(timeoutId);
+  }, [state.currentProject, state.blocks]);
+
+  // Autosave effect
+  useEffect(() => {
+    if (!state.currentProject) return;
+
+    const timeoutId = setTimeout(() => {
+      dispatch({ type: 'SAVE_START' });
+
+      const result = saveProject(state.currentProject);
+
+      dispatch({
+        type: 'SAVE_COMPLETE',
+        payload: {
+          time: Date.now(),
+          error: result.success ? null : result.error || 'Unknown error',
+        },
+      });
+    }, 2000);
+
+    return () => clearTimeout(timeoutId);
+  }, [state.currentProject]);
 
   return (
     <div className="app">
-      <ToolPanel 
-        selectedTool={selectedTool}
-        onToolSelect={setSelectedTool}
-        onClearAll={() => {
-          setTracks([]);
-          setSignals([]);
-        }}
-        onSave={() => {
-          const data = { tracks, signals };
-          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'railway-design.json';
-          a.click();
-          URL.revokeObjectURL(url);
-        }}
-        onLoad={(event) => {
-          const file = event.target.files?.[0];
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              try {
-                const data = JSON.parse(e.target?.result as string);
-                setTracks(data.tracks || []);
-                setSignals(data.signals || []);
-              } catch (error) {
-                alert('Error loading file');
-              }
-            };
-            reader.readAsText(file);
-          }
-        }}
-      />
-      <RailwayMap
-        selectedTool={selectedTool}
-        tracks={tracks}
-        signals={signals}
-        onTracksChange={setTracks}
-        onSignalsChange={setSignals}
-      />
+      <div className="app-header">
+        <ProjectManager currentProject={state.currentProject} dispatch={dispatch} />
+        <UndoRedoToolbar commandHistory={state.commandHistory} dispatch={dispatch} />
+      </div>
+      <div className="app-body">
+        <div className="left-panel">
+          <ToolPanel
+            selectedTool={state.selectedTool}
+            currentProject={state.currentProject}
+            lastSaveTime={state.lastSaveTime}
+            saveError={state.saveError}
+            showBlockView={state.showBlockView}
+            dispatch={dispatch}
+          />
+          {state.showBlockView && (
+            <BlockViewer
+              blocks={state.blocks}
+              selectedBlockId={state.selectedBlockId}
+              onBlockSelect={(blockId) => dispatch({ type: 'BLOCK_SELECT', payload: { blockId } })}
+            />
+          )}
+        </div>
+        <RailwayMap state={state} dispatch={dispatch} />
+        <IssuesPanel issues={state.issues} dispatch={dispatch} />
+      </div>
     </div>
   );
 }
 
 export default App;
-
