@@ -1,6 +1,7 @@
-import { Node, Segment, Issue } from '../types/railway';
+import { Node, Segment, Issue, Signal, Block } from '../types/railway';
 import { Viewport } from '../types/state';
 import { screenToWorld } from './coordinates';
+import { computeSignalPosition } from './signalPlacement';
 
 /**
  * Render grid overlay
@@ -161,4 +162,175 @@ export function renderDrawPreview(
   ctx.lineTo(endPoint.x, endPoint.y);
   ctx.stroke();
   ctx.setLineDash([]);
+}
+
+/**
+ * Render signals on segments
+ */
+export function renderSignals(
+  ctx: CanvasRenderingContext2D,
+  signals: Signal[],
+  segmentMap: Map<string, Segment>,
+  nodeMap: Map<string, Node>,
+  selectedIds: Set<string>,
+  hoveredId: string | null,
+  viewport: Viewport
+): void {
+  for (const signal of signals) {
+    const segment = segmentMap.get(signal.segmentId);
+    if (!segment) continue;
+    
+    const position = computeSignalPosition(signal, segment, nodeMap);
+    if (!position) continue;
+    
+    const isSelected = selectedIds.has(signal.id);
+    const isHovered = hoveredId === signal.id;
+    
+    // Signal base - different shapes for different types
+    const size = 12 / viewport.scale;
+    const color = signal.type === 'block' ? '#FF4444' : '#44FF44'; // Red for block, Green for path
+    
+    ctx.fillStyle = isSelected
+      ? '#ffcc00'
+      : isHovered
+      ? '#ff9900'
+      : color;
+    
+    if (signal.type === 'block') {
+      // Block signal: square (like traditional railway signals)
+      ctx.fillRect(
+        position.x - size / 2,
+        position.y - size / 2,
+        size,
+        size
+      );
+    } else {
+      // Path signal: hexagon (to distinguish from block signals)
+      ctx.beginPath();
+      const hexRadius = size / 2;
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i;
+        const x = position.x + hexRadius * Math.cos(angle);
+        const y = position.y + hexRadius * Math.sin(angle);
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+    
+    // Border
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2 / viewport.scale;
+    ctx.stroke();
+    
+    // Direction indicator
+    renderSignalDirection(ctx, signal, position, segment, nodeMap, viewport);
+  }
+}
+
+/**
+ * Render signal direction arrow
+ */
+function renderSignalDirection(
+  ctx: CanvasRenderingContext2D,
+  signal: Signal,
+  position: { x: number; y: number },
+  segment: Segment,
+  nodeMap: Map<string, Node>,
+  viewport: Viewport
+): void {
+  const nodeA = nodeMap.get(segment.aNodeId);
+  const nodeB = nodeMap.get(segment.bNodeId);
+  if (!nodeA || !nodeB) return;
+  
+  // Calculate direction along segment
+  const dx = nodeB.x - nodeA.x;
+  const dy = nodeB.y - nodeA.y;
+  const angle = Math.atan2(dy, dx);
+  
+  const arrowSize = 8 / viewport.scale;
+  
+  ctx.strokeStyle = '#ffffff';
+  ctx.fillStyle = '#ffffff';
+  ctx.lineWidth = 2 / viewport.scale;
+  
+  if (signal.orientation === 'AtoB') {
+    // Arrow pointing from A to B
+    drawArrow(ctx, position, angle, arrowSize);
+  } else if (signal.orientation === 'BtoA') {
+    // Arrow pointing from B to A
+    drawArrow(ctx, position, angle + Math.PI, arrowSize);
+  } else {
+    // Bidirectional: two arrows
+    drawArrow(ctx, { x: position.x - 3 / viewport.scale, y: position.y }, angle, arrowSize / 1.5);
+    drawArrow(ctx, { x: position.x + 3 / viewport.scale, y: position.y }, angle + Math.PI, arrowSize / 1.5);
+  }
+}
+
+/**
+ * Draw arrow at position pointing in direction
+ */
+function drawArrow(
+  ctx: CanvasRenderingContext2D,
+  position: { x: number; y: number },
+  angle: number,
+  size: number
+): void {
+  ctx.save();
+  ctx.translate(position.x, position.y);
+  ctx.rotate(angle);
+  
+  ctx.beginPath();
+  ctx.moveTo(size, 0);
+  ctx.lineTo(0, -size / 2);
+  ctx.lineTo(0, size / 2);
+  ctx.closePath();
+  ctx.fill();
+  
+  ctx.restore();
+}
+
+/**
+ * Render blocks with color overlay
+ */
+export function renderBlocks(
+  ctx: CanvasRenderingContext2D,
+  blocks: Block[],
+  segments: Segment[],
+  nodeMap: Map<string, Node>,
+  selectedBlockId: string | null,
+  viewport: Viewport
+): void {
+  const segmentMap = new Map(segments.map(s => [s.id, s]));
+  
+  for (const block of blocks) {
+    const isSelected = block.id === selectedBlockId;
+    
+    // Set block color with transparency
+    ctx.strokeStyle = block.color;
+    ctx.lineWidth = (isSelected ? 8 : 5) / viewport.scale;
+    ctx.globalAlpha = isSelected ? 0.8 : 0.5;
+    ctx.lineCap = 'round';
+    
+    // Draw all segments in this block
+    for (const segId of block.segmentIds) {
+      const seg = segmentMap.get(segId);
+      if (!seg) continue;
+      
+      const nodeA = nodeMap.get(seg.aNodeId);
+      const nodeB = nodeMap.get(seg.bNodeId);
+      if (!nodeA || !nodeB) continue;
+      
+      ctx.beginPath();
+      ctx.moveTo(nodeA.x, nodeA.y);
+      ctx.lineTo(nodeB.x, nodeB.y);
+      ctx.stroke();
+    }
+    
+    ctx.globalAlpha = 1.0;
+  }
 }

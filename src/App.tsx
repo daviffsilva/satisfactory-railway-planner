@@ -3,9 +3,12 @@ import RailwayMap from './components/RailwayMap';
 import ToolPanel from './components/ToolPanel';
 import IssuesPanel from './components/IssuesPanel';
 import ProjectManager from './components/ProjectManager';
+import UndoRedoToolbar from './components/UndoRedoToolbar';
+import BlockViewer from './components/BlockViewer';
 import { reducer, initialState } from './state/reducer';
 import { validateProject } from './utils/validation';
 import { saveProject, loadProject, loadProjectMetadataList } from './utils/localStorage';
+import { computeBlocks } from './utils/blocks';
 import './App.css';
 
 function App() {
@@ -30,7 +33,7 @@ function App() {
     });
   }, []);
 
-  // Validation effect
+  // Validation effect (P1 + P2)
   useEffect(() => {
     if (!state.currentProject) return;
 
@@ -41,6 +44,22 @@ function App() {
 
     return () => clearTimeout(timeoutId);
   }, [state.currentProject]);
+
+  // Block computation effect (P2)
+  useEffect(() => {
+    if (!state.currentProject) return;
+
+    const timeoutId = setTimeout(() => {
+      const blocks = computeBlocks(
+        state.currentProject.segments,
+        state.currentProject.signals,
+        state.currentProject.nodes
+      );
+      dispatch({ type: 'BLOCKS_COMPUTE', payload: { blocks } });
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [state.currentProject?.segments, state.currentProject?.signals, state.currentProject?.nodes]);
 
   // Autosave effect
   useEffect(() => {
@@ -65,15 +84,27 @@ function App() {
 
   return (
     <div className="app">
-      <ProjectManager currentProject={state.currentProject} dispatch={dispatch} />
+      <div className="app-header">
+        <ProjectManager currentProject={state.currentProject} dispatch={dispatch} />
+        <UndoRedoToolbar commandHistory={state.commandHistory} dispatch={dispatch} />
+      </div>
       <div className="app-body">
-        <ToolPanel
-          selectedTool={state.selectedTool}
-          currentProject={state.currentProject}
-          lastSaveTime={state.lastSaveTime}
-          saveError={state.saveError}
-          dispatch={dispatch}
-        />
+        <div className="left-panel">
+          <ToolPanel
+            selectedTool={state.selectedTool}
+            currentProject={state.currentProject}
+            lastSaveTime={state.lastSaveTime}
+            saveError={state.saveError}
+            dispatch={dispatch}
+          />
+          {state.showBlockView && (
+            <BlockViewer
+              blocks={state.blocks}
+              selectedBlockId={state.selectedBlockId}
+              onBlockSelect={(blockId) => dispatch({ type: 'BLOCK_SELECT', payload: { blockId } })}
+            />
+          )}
+        </div>
         <RailwayMap state={state} dispatch={dispatch} />
         <IssuesPanel issues={state.issues} dispatch={dispatch} />
       </div>

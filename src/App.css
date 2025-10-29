@@ -20,8 +20,22 @@ body {
   color: #fff;
 }
 
+.app-header {
+  display: flex;
+  background: #2a2a2a;
+  border-bottom: 1px solid #333;
+}
+
 .app-body {
   display: flex;
   flex: 1;
   overflow: hidden;
+}
+
+.left-panel {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #333;
+  background: #1a1a1a;
+  overflow-y: auto;
 }

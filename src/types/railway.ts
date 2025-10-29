@@ -29,28 +29,96 @@ export interface Segment {
   id: string;
   aNodeId: string;
   bNodeId: string;
-  geometry: 'straight';  // P1: straight only
+  geometry: 'straight' | 'bezier';  // P2: added bezier curves
   metadata?: {
     createdAt: number;
     length?: number;  // cached, in centimeters
+    controlPoint?: Point;  // For bezier curves
   };
 }
 
-// P2 Preview - include type but not implementation
+/**
+ * Signal represents a control point on a segment
+ * Signals divide the network into blocks for train collision prevention
+ * 
+ * Signal Types (Satisfactory Railway System):
+ * 
+ * BLOCK SIGNAL:
+ * - Traditional railway block system
+ * - Divides track into blocks
+ * - Only ONE train allowed per block at a time
+ * - Simpler logic, easier to set up
+ * - Best for: Simple routes, bidirectional tracks, stations
+ * 
+ * PATH SIGNAL:
+ * - Advanced pathfinding signal system
+ * - Reserves entire path through multiple blocks
+ * - Multiple trains can share same block if on different reserved paths
+ * - Prevents deadlocks in complex junctions
+ * - Best for: Complex intersections, unidirectional loops, high-traffic areas
+ */
 export interface Signal {
   id: string;
   segmentId: string;
-  offsetT: number;  // position along segment [0.0, 1.0]
-  direction: 'AtoB' | 'BtoA' | 'Both';
+  offsetT: number;          // Position along segment [0.0, 1.0]
+  orientation: SignalOrientation;
+  type: 'block' | 'path';   // Both types fully implemented in P2
   metadata?: {
     createdAt: number;
+    label?: string;
   };
 }
+
+export type SignalOrientation = 
+  | 'AtoB'          // One-way: nodeA → nodeB
+  | 'BtoA'          // One-way: nodeB → nodeA
+  | 'bidirectional'; // Two-way
+
+/**
+ * Block represents a track section where only one train can be
+ * Derived data structure, computed from segments and signals
+ */
+export interface Block {
+  id: string;
+  segmentIds: string[];     // Segments in this block
+  boundarySignalIds: string[]; // Signals at block boundaries
+  length: number;           // Total length in centimeters
+  connectedBlockIds: string[]; // Adjacent blocks
+  color: string;            // Unique color for visualization
+  metadata?: {
+    isOrphan: boolean;      // Not connected to main network
+  };
+}
+
+/**
+ * Signal validation issues
+ */
+export type SignalIssueType =
+  | 'signal_overlap'        // Two signals too close
+  | 'signal_conflict'       // Opposing one-way signals (deadlock)
+  | 'mega_block'            // Block spans multiple junctions
+  | 'path_signal_complexity'; // Path signal in simple scenario (suggestion)
+
+/**
+ * Junction validation issues
+ */
+export type JunctionIssueType =
+  | 'junction_too_complex'  // Too many branches
+  | 'junction_angle_too_small'; // Angle between tracks too acute
+
+/**
+ * Curve validation issues
+ */
+export type CurveIssueType =
+  | 'curve_extreme';        // Curve has extreme curvature
 
 export type IssueType = 
   | 'disconnected_network'  // Multiple independent networks (informational only)
   | 'self_intersection'
-  | 'duplicate_segment';
+  | 'duplicate_segment'
+  | SignalIssueType
+  | JunctionIssueType
+  | CurveIssueType;
 
 export interface Issue {
   id: string;

@@ -1,11 +1,13 @@
-import { Project, Issue, Point, ProjectSettings } from './railway';
+import { Project, Issue, Point, ProjectSettings, Block } from './railway';
+import { CommandHistory } from './commands';
 
 export type ToolType = 
   | 'select'
   | 'track'
   | 'signal'
   | 'delete'
-  | 'pan';
+  | 'pan'
+  | 'curve';  // P2: curve editing tool
 
 export interface Viewport {
   offsetX: number;      // pan offset in screen pixels
@@ -21,22 +23,29 @@ export interface AppState {
   
   // Computed data
   issues: Issue[];
+  blocks: Block[];  // P2: computed blocks
   
   // UI state
   viewport: Viewport;
   selectedTool: ToolType;
   selectedElementIds: Set<string>;
+  showBlockView: boolean;  // P2: toggle block visualization
+  selectedBlockId: string | null;  // P2: selected block for highlighting
   
   // Interaction state
   isDrawing: boolean;
   drawStartNodeId: string | null;
   hoverPoint: Point | null;
   hoverElementId: string | null;
+  editingControlPoint: string | null;  // P2: segment ID being edited
   
   // Persistence state
   isSaving: boolean;
   lastSaveTime: number | null;
   saveError: string | null;
+  
+  // P2: Command history for undo/redo
+  commandHistory: CommandHistory;
 }
 
 export const DEFAULT_VIEWPORT: Viewport = {

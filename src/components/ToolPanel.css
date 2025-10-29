@@ -1,9 +1,6 @@
 .tool-panel {
   width: 280px;
-  background: #1a1a1a;
-  border-right: 1px solid #333;
   padding: 1rem;
-  overflow-y: auto;
   color: #fff;
   display: flex;
   flex-direction: column;

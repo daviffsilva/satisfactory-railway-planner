@@ -1,20 +1,26 @@
 import { produce } from 'immer';
 import { AppState, DEFAULT_VIEWPORT, DEFAULT_PROJECT_SETTINGS } from '../types/state';
 import { Action } from './actions';
+import { createCommandHistory, executeCommand, undoCommand, redoCommand, canUndo, canRedo } from './commandHistory';
 
 export const initialState: AppState = {
   currentProject: null,
   issues: [],
+  blocks: [],
   viewport: DEFAULT_VIEWPORT,
   selectedTool: 'select',
   selectedElementIds: new Set(),
+  showBlockView: false,
+  selectedBlockId: null,
   isDrawing: false,
   drawStartNodeId: null,
   hoverPoint: null,
   hoverElementId: null,
+  editingControlPoint: null,
   isSaving: false,
   lastSaveTime: null,
   saveError: null,
+  commandHistory: createCommandHistory(),
 };
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -97,6 +103,17 @@ export function reducer(state: AppState, action: Action): AppState {
         break;
       }
       
+      case 'SEGMENT_UPDATE': {
+        if (draft.currentProject) {
+          const segment = draft.currentProject.segments.find(s => s.id === action.payload.id);
+          if (segment) {
+            Object.assign(segment, action.payload.changes);
+            draft.currentProject.updatedAt = new Date().toISOString();
+          }
+        }
+        break;
+      }
+      
       case 'SEGMENT_DELETE': {
         if (draft.currentProject) {
           draft.currentProject.segments = draft.currentProject.segments.filter(
@@ -104,6 +121,52 @@ export function reducer(state: AppState, action: Action): AppState {
           );
           draft.currentProject.updatedAt = new Date().toISOString();
         }
+        break;
+      }
+      
+      // SIGNAL ACTIONS (P2)
+      case 'SIGNAL_CREATE': {
+        if (draft.currentProject) {
+          draft.currentProject.signals.push(action.payload.signal);
+          draft.currentProject.updatedAt = new Date().toISOString();
+        }
+        break;
+      }
+      
+      case 'SIGNAL_UPDATE': {
+        if (draft.currentProject) {
+          const signal = draft.currentProject.signals.find(s => s.id === action.payload.id);
+          if (signal) {
+            Object.assign(signal, action.payload.changes);
+            draft.currentProject.updatedAt = new Date().toISOString();
+          }
+        }
+        break;
+      }
+      
+      case 'SIGNAL_DELETE': {
+        if (draft.currentProject) {
+          draft.currentProject.signals = draft.currentProject.signals.filter(
+            s => s.id !== action.payload.id
+          );
+          draft.currentProject.updatedAt = new Date().toISOString();
+        }
+        break;
+      }
+      
+      // BLOCK COMPUTATION (P2)
+      case 'BLOCKS_COMPUTE': {
+        draft.blocks = action.payload.blocks;
+        break;
+      }
+      
+      case 'BLOCK_SELECT': {
+        draft.selectedBlockId = action.payload.blockId;
+        break;
+      }
+      
+      case 'BLOCK_VIEW_TOGGLE': {
+        draft.showBlockView = !draft.showBlockView;
         break;
       }
       
@@ -185,6 +248,11 @@ export function reducer(state: AppState, action: Action): AppState {
         break;
       }
       
+      case 'CONTROL_POINT_EDIT': {
+        draft.editingControlPoint = action.payload.segmentId;
+        break;
+      }
+      
       // PERSISTENCE
       case 'SAVE_START': {
         draft.isSaving = true;
@@ -195,6 +263,36 @@ export function reducer(state: AppState, action: Action): AppState {
         draft.isSaving = false;
         draft.lastSaveTime = action.payload.time;
         draft.saveError = action.payload.error;
+        break;
+      }
+      
+      // UNDO/REDO (P2)
+      case 'EXECUTE_COMMAND': {
+        const result = executeCommand(
+          draft.commandHistory,
+          action.payload.command,
+          state
+        );
+        return result.newState;
+      }
+      
+      case 'UNDO': {
+        if (canUndo(draft.commandHistory)) {
+          const result = undoCommand(draft.commandHistory, state);
+          if (result) {
+            return result.newState;
+          }
+        }
+        break;
+      }
+      
+      case 'REDO': {
+        if (canRedo(draft.commandHistory)) {
+          const result = redoCommand(draft.commandHistory, state);
+          if (result) {
+            return result.newState;
+          }
+        }
         break;
       }
     }

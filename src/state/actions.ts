@@ -1,5 +1,6 @@
-import { Node, Segment, Signal, Issue, Project, ProjectSettings } from '../types/railway';
+import { Node, Segment, Signal, Issue, Project, ProjectSettings, Block } from '../types/railway';
 import { ToolType, Point } from '../types/state';
+import { Command } from '../types/commands';
 
 export type Action =
   // Project actions
@@ -15,11 +16,18 @@ export type Action =
   
   // Segment actions
   | { type: 'SEGMENT_CREATE'; payload: { segment: Segment } }
+  | { type: 'SEGMENT_UPDATE'; payload: { id: string; changes: Partial<Segment> } }
   | { type: 'SEGMENT_DELETE'; payload: { id: string } }
   
-  // Signal actions (P2, stub for now)
+  // Signal actions (P2)
   | { type: 'SIGNAL_CREATE'; payload: { signal: Signal } }
+  | { type: 'SIGNAL_UPDATE'; payload: { id: string; changes: Partial<Signal> } }
   | { type: 'SIGNAL_DELETE'; payload: { id: string } }
+  
+  // Block computation (P2)
+  | { type: 'BLOCKS_COMPUTE'; payload: { blocks: Block[] } }
+  | { type: 'BLOCK_SELECT'; payload: { blockId: string | null } }
+  | { type: 'BLOCK_VIEW_TOGGLE' }
   
   // Validation
   | { type: 'VALIDATION_COMPLETE'; payload: { issues: Issue[] } }
@@ -40,7 +48,13 @@ export type Action =
   | { type: 'DRAW_START'; payload: { nodeId: string } }
   | { type: 'DRAW_END' }
   | { type: 'HOVER_UPDATE'; payload: { point: Point | null; elementId: string | null } }
+  | { type: 'CONTROL_POINT_EDIT'; payload: { segmentId: string | null } }
   
   // Persistence
   | { type: 'SAVE_START' }
-  | { type: 'SAVE_COMPLETE'; payload: { time: number; error: string | null } };
+  | { type: 'SAVE_COMPLETE'; payload: { time: number; error: string | null } }
+  
+  // Undo/Redo (P2)
+  | { type: 'UNDO' }
+  | { type: 'REDO' }
+  | { type: 'EXECUTE_COMMAND'; payload: { command: Command } };
