@@ -102,6 +102,23 @@
   font-size: 0.9rem;
 }
 
+.block-view-toggle h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+}
+
+.block-view-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.block-view-toggle input[type="checkbox"] {
+  cursor: pointer;
+}
+
 .save-status {
   padding: 0.75rem;
   background: #2a2a2a;

@@ -33,19 +33,7 @@ function App() {
     });
   }, []);
 
-  // Validation effect (P1 + P2)
-  useEffect(() => {
-    if (!state.currentProject) return;
-
-    const timeoutId = setTimeout(() => {
-      const issues = validateProject(state.currentProject);
-      dispatch({ type: 'VALIDATION_COMPLETE', payload: { issues } });
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [state.currentProject]);
-
-  // Block computation effect (P2)
+  // Block computation effect (P2) - must run before validation
   useEffect(() => {
     if (!state.currentProject) return;
 
@@ -60,6 +48,21 @@ function App() {
 
     return () => clearTimeout(timeoutId);
   }, [state.currentProject?.segments, state.currentProject?.signals, state.currentProject?.nodes]);
+
+  // Validation effect (P1 + P2) - runs after blocks are computed
+  useEffect(() => {
+    if (!state.currentProject) return;
+
+    const timeoutId = setTimeout(() => {
+      const issues = validateProject(
+        state.currentProject,
+        state.blocks.length > 0 ? state.blocks : undefined
+      );
+      dispatch({ type: 'VALIDATION_COMPLETE', payload: { issues } });
+    }, 350); // Slightly longer delay to ensure blocks compute first
+
+    return () => clearTimeout(timeoutId);
+  }, [state.currentProject, state.blocks]);
 
   // Autosave effect
   useEffect(() => {

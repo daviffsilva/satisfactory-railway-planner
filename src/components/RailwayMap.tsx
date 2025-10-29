@@ -13,7 +13,11 @@ import {
   renderNodes,
   renderIssues,
   renderDrawPreview,
+  renderSignals,
+  renderBlocks,
 } from '../utils/rendering';
+import { findNearestPointOnSegment } from '../utils/signalPlacement';
+import { Signal } from '../types/railway';
 import './RailwayMap.css';
 
 interface RailwayMapProps {
@@ -62,6 +66,18 @@ const RailwayMap: React.FC<RailwayMapProps> = ({ state, dispatch }) => {
       );
     }
 
+    // Render blocks first if block view is enabled
+    if (state.showBlockView && state.blocks.length > 0) {
+      renderBlocks(
+        ctx,
+        state.blocks,
+        state.currentProject.segments,
+        nodeMap,
+        state.selectedBlockId,
+        state.viewport
+      );
+    }
+
     if (state.currentProject.settings.display.showSegments) {
       renderSegments(
         ctx,
@@ -85,6 +101,20 @@ const RailwayMap: React.FC<RailwayMapProps> = ({ state, dispatch }) => {
 
     if (state.currentProject.settings.display.showIssues) {
       renderIssues(ctx, state.issues, state.viewport);
+    }
+
+    // Render signals
+    if (state.currentProject.settings.display.showSignals && state.currentProject.signals.length > 0) {
+      const segmentMap = new Map(state.currentProject.segments.map(s => [s.id, s]));
+      renderSignals(
+        ctx,
+        state.currentProject.signals,
+        segmentMap,
+        nodeMap,
+        state.selectedElementIds,
+        state.hoverElementId,
+        state.viewport
+      );
     }
 
     // Draw preview
@@ -173,6 +203,8 @@ const RailwayMap: React.FC<RailwayMapProps> = ({ state, dispatch }) => {
 
             dispatch({ type: 'DRAW_END' });
           }
+        } else if (state.selectedTool === 'signal') {
+          handleSignalPlacement(worldPoint, state, dispatch);
         } else if (state.selectedTool === 'delete') {
           handleDelete(worldPoint, state, dispatch);
         }
@@ -220,9 +252,28 @@ const RailwayMap: React.FC<RailwayMapProps> = ({ state, dispatch }) => {
         worldPoint = snapToGrid(worldPoint, settings.grid.size);
       }
 
+      // Detect hovered element for signal tool
+      let hoveredElementId: string | null = null;
+      if (state.selectedTool === 'signal') {
+        const nodeMap = new Map(state.currentProject.nodes.map(n => [n.id, n]));
+        const threshold = 400; // 4 meters
+        
+        for (const seg of state.currentProject.segments) {
+          const nodeA = nodeMap.get(seg.aNodeId);
+          const nodeB = nodeMap.get(seg.bNodeId);
+          if (!nodeA || !nodeB) continue;
+
+          const dist = pointToLineDistance(worldPoint, nodeA, nodeB);
+          if (dist < threshold) {
+            hoveredElementId = seg.id;
+            break;
+          }
+        }
+      }
+
       dispatch({
         type: 'HOVER_UPDATE',
-        payload: { point: worldPoint, elementId: null },
+        payload: { point: worldPoint, elementId: hoveredElementId },
       });
     },
     [state, dispatch]
@@ -306,6 +357,29 @@ function handleDelete(
   if (!state.currentProject) return;
 
   const threshold = 400; // 4 meters
+  const nodeMap = new Map(state.currentProject.nodes.map(n => [n.id, n]));
+
+  // Check for signal deletion first (smaller targets, higher priority)
+  for (const signal of state.currentProject.signals) {
+    const segment = state.currentProject.segments.find(s => s.id === signal.segmentId);
+    if (!segment) continue;
+
+    const nodeA = nodeMap.get(segment.aNodeId);
+    const nodeB = nodeMap.get(segment.bNodeId);
+    if (!nodeA || !nodeB) continue;
+
+    // Calculate signal position
+    const signalPos = {
+      x: nodeA.x + (nodeB.x - nodeA.x) * signal.offsetT,
+      y: nodeA.y + (nodeB.y - nodeA.y) * signal.offsetT,
+    };
+
+    const dist = Math.hypot(signalPos.x - worldPoint.x, signalPos.y - worldPoint.y);
+    if (dist < threshold) {
+      dispatch({ type: 'SIGNAL_DELETE', payload: { id: signal.id } });
+      return;
+    }
+  }
 
   // Check for node deletion
   for (const node of state.currentProject.nodes) {
@@ -317,7 +391,6 @@ function handleDelete(
   }
 
   // Check for segment deletion
-  const nodeMap = new Map(state.currentProject.nodes.map(n => [n.id, n]));
   for (const seg of state.currentProject.segments) {
     const nodeA = nodeMap.get(seg.aNodeId);
     const nodeB = nodeMap.get(seg.bNodeId);
@@ -364,6 +437,53 @@ function pointToLineDistance(
   const dx = point.x - xx;
   const dy = point.y - yy;
   return Math.sqrt(dx * dx + dy * dy);
+}
+
+// Helper function to handle signal placement
+function handleSignalPlacement(
+  worldPoint: { x: number; y: number },
+  state: AppState,
+  dispatch: React.Dispatch<Action>
+): void {
+  if (!state.currentProject) return;
+
+  const threshold = 400; // 4 meters
+  const nodeMap = new Map(state.currentProject.nodes.map(n => [n.id, n]));
+
+  // Find closest segment
+  let closestSegment: Segment | null = null;
+  let minDist = threshold;
+
+  for (const seg of state.currentProject.segments) {
+    const nodeA = nodeMap.get(seg.aNodeId);
+    const nodeB = nodeMap.get(seg.bNodeId);
+    if (!nodeA || !nodeB) continue;
+
+    const dist = pointToLineDistance(worldPoint, nodeA, nodeB);
+    if (dist < minDist) {
+      minDist = dist;
+      closestSegment = seg;
+    }
+  }
+
+  if (closestSegment) {
+    // Calculate offsetT (position along segment)
+    const offsetT = findNearestPointOnSegment(worldPoint, closestSegment, nodeMap);
+
+    // Create signal with default settings
+    const signal: Signal = {
+      id: crypto.randomUUID(),
+      segmentId: closestSegment.id,
+      offsetT: offsetT,
+      orientation: 'bidirectional',
+      type: 'block',
+      metadata: {
+        createdAt: Date.now(),
+      },
+    };
+
+    dispatch({ type: 'SIGNAL_CREATE', payload: { signal } });
+  }
 }
 
 export default RailwayMap;

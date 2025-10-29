@@ -1,4 +1,4 @@
-import { Project, Issue } from '../types/railway';
+import { Project, Issue, Block } from '../types/railway';
 import { findSelfIntersections, findDuplicateSegments } from './geometry';
 import { findOrphanedTracks } from './graph';
 import { findSignalOverlaps, findSignalConflicts } from './signalPlacement';
@@ -9,7 +9,7 @@ import { validateBezierCurve } from './curves';
 /**
  * Run all validation checks on a project (P1 + P2)
  */
-export function validateProject(project: Project): Issue[] {
+export function validateProject(project: Project, blocks?: Block[]): Issue[] {
   const issues: Issue[] = [];
   
   // Build node map for efficient lookups
@@ -22,8 +22,15 @@ export function validateProject(project: Project): Issue[] {
   
   // P2 validation checks
   // Signal validation
-  issues.push(...findSignalOverlaps(project.signals));
-  issues.push(...findSignalConflicts(project.signals));
+  if (project.signals.length > 0) {
+    issues.push(...findSignalOverlaps(project.signals));
+    issues.push(...findSignalConflicts(project.signals));
+  }
+  
+  // Block validation (if blocks are provided)
+  if (blocks && blocks.length > 0) {
+    issues.push(...findMegaBlocks(blocks, project.segments, project.nodes));
+  }
   
   // Junction validation
   const junctions = findJunctions(project.nodes, project.segments);
